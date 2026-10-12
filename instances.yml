@@ -8,7 +8,7 @@
 # Une instance retirée est arrêtée mais ses données sont gardées : la remettre dans la liste la redémarre telle quelle.
 #
 # Champs :
-#   id           obligatoire : minuscules, chiffres et tirets (32 caractères au plus), sert de sous-domaine
+#   id           obligatoire : lettres, chiffres et tirets (32 caractères au plus), sert de sous-domaine (en minuscules)
 #   description  facultatif : pour qui, pourquoi
 #   backend      facultatif : version de l'image vigilobs/vigilo-backend (défaut : 0.0, dernière 0.0.x publiée)
 #   webapp       facultatif : version de l'image ghcr.io/jesuisundesdeux/vigilo-webapp (défaut : latest ; edge = master)

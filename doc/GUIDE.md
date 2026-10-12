@@ -43,20 +43,27 @@ webhooks, étape « Référencement » du guide de l'admin).
 
 Toutes les `SYNC_INTERVAL` secondes (60) :
 
-1. `git fetch` + `git reset --hard origin/<DEMO_BRANCH>` (le serveur ne modifie jamais le dépôt ; `state/` et `.env`
-   sont ignorés par git) ; si le script a changé, il se relance ;
+1. `git fetch` de `DEMO_REPO_URL` (HTTPS, quelle que soit l'adresse du clone : le conteneur n'a pas de clé SSH) +
+   `git reset --hard origin/<DEMO_BRANCH>` (le serveur ne modifie jamais le dépôt ; `state/` et `.env` sont ignorés
+   par git) ; si le script a changé, il se relance ;
 2. lecture et vérification d'`instances.yml` ; s'il est invalide, rien n'est changé ;
-3. écriture de `state/compose.instances.yml` et, s'il a changé (ou au démarrage, ou après la mise à jour des images
+3. images de la webapp : si une image `ghcr.io/jesuisundesdeux/vigilo-webapp:<webapp>` n'est ni présente ni
+   téléchargeable (pas encore de tag, package privé), elle est **construite sur le serveur** depuis le dépôt
+   vigilo-webapp (`docker build <WEBAPP_GIT>#<ref>` : `vX.Y.Z` pour une version, `master` pour `latest`, `edge`, `1`,
+   `1.19`, sinon la branche du même nom ; nécessite `git` sur l'hôte Docker). Elle est reconstruite à chaque mise à
+   jour des images tant que le registre n'en a pas ;
+4. écriture de `state/compose.instances.yml` et, s'il a changé (ou au démarrage, ou après la mise à jour des images
    toutes les `PULL_INTERVAL` heures), `docker compose -p vigilo-demo-instances up -d --remove-orphans` : les démos
-   retirées sont supprimées, leurs volumes et `state/instances/<id>/` restent ;
-4. mise à jour de `citylist.json` et `categorielist.json` de chaque démo.
+   retirées sont supprimées, leurs volumes et `state/instances/<id>/` restent. Si cette commande échoue (image
+   introuvable pour une démo…), les démos sont démarrées une par une : une démo en échec n'empêche pas les autres ;
+5. mise à jour de `citylist.json` et `categorielist.json` de chaque démo.
 
 Commandes : `python3 controller/vigilo-demo.py check` (vérifie `instances.yml`), `render` (affiche le compose généré),
 `sync` (un passage), `loop` (par défaut).
 
 Variables (`.env`) : `DEMO_DIR`, `DEMO_DOMAIN`, `DEMO_BIND`, `VIGILO_SETUP_CODE` (obligatoire, 12 à 64 lettres ou
-chiffres), `DEMO_BRANCH`, `SYNC_INTERVAL`, `PULL_INTERVAL` ; pour les tests : `DEMO_GIT_PULL=false`,
-`BACKEND_IMAGE`, `WEBAPP_IMAGE`, `MARIADB_IMAGE`.
+chiffres), `DEMO_BRANCH`, `DEMO_REPO_URL`, `SYNC_INTERVAL`, `PULL_INTERVAL` ; pour les tests : `DEMO_GIT_PULL=false`,
+`BACKEND_IMAGE`, `WEBAPP_IMAGE`, `WEBAPP_GIT`, `WEBAPP_BUILD_CONTEXT` (dossier local à construire), `MARIADB_IMAGE`.
 
 Une modification de `docker-compose.yml` ou de `controller/Dockerfile` (socle) n'est pas appliquée automatiquement :
 `docker compose up -d --build` sur le serveur.

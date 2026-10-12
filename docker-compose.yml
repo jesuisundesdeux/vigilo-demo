@@ -31,6 +31,7 @@ services:
       - DEMO_DIR=${DEMO_DIR:-/opt/vigilo-demo}
       - DEMO_DOMAIN=${DEMO_DOMAIN:-vigilo-demo.velocite-montpellier.fr}
       - DEMO_BRANCH=${DEMO_BRANCH:-main}
+      - DEMO_REPO_URL=${DEMO_REPO_URL:-https://github.com/jesuisundesdeux/vigilo-demo.git}
       - DEMO_GIT_PULL=${DEMO_GIT_PULL:-true}
       - SYNC_INTERVAL=${SYNC_INTERVAL:-60}
       - PULL_INTERVAL=${PULL_INTERVAL:-6}
