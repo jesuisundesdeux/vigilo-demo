@@ -13,5 +13,5 @@
 #   backend      facultatif : version de l'image vigilobs/vigilo-backend (défaut : 0.0, dernière 0.0.x publiée)
 #   webapp       facultatif : version de l'image ghcr.io/jesuisundesdeux/vigilo-webapp (défaut : latest ; edge = master)
 instances:
-  - id: demo
-    description: Démo générale
+  - id: Creusot
+    description: Creusot
