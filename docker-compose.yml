@@ -1,0 +1,45 @@
+# Vigilo demo farm: entry point (Traefik) and controller. The instances themselves are
+# created by the controller from instances.yml (project "vigilo-demo-instances").
+#
+# Installation (once, see README.md): git clone into DEMO_DIR, cp .env.example .env, then
+#   docker compose up -d --build
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.6}
+    restart: unless-stopped
+    command:
+      - --entrypoints.web.address=:80
+      # Only reachable from the host (nginx in front, TLS): keep its X-Forwarded-* headers
+      - --entrypoints.web.forwardedHeaders.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=vigilo-demo-proxy
+      # Only the containers of the demos
+      - --providers.docker.constraints=LabelRegex(`vigilo-demo.instance`, `.+`)
+      - --log.level=WARN
+    ports:
+      - "${DEMO_BIND:-127.0.0.1:8480}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+
+  controller:
+    build: ./controller
+    restart: unless-stopped
+    environment:
+      - DEMO_DIR=${DEMO_DIR:-/opt/vigilo-demo}
+      - DEMO_DOMAIN=${DEMO_DOMAIN:-vigilo-demo.velocite-montpellier.fr}
+      - DEMO_BRANCH=${DEMO_BRANCH:-main}
+      - DEMO_GIT_PULL=${DEMO_GIT_PULL:-true}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-60}
+      - PULL_INTERVAL=${PULL_INTERVAL:-6}
+      - VIGILO_SETUP_CODE=${VIGILO_SETUP_CODE:?VIGILO_SETUP_CODE must be set in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path as on the host: the bind mounts of the generated compose file are host paths
+      - ${DEMO_DIR:-/opt/vigilo-demo}:${DEMO_DIR:-/opt/vigilo-demo}
+
+networks:
+  proxy:
+    name: vigilo-demo-proxy

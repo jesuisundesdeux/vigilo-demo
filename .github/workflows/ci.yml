@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyyaml
+      - name: instances.yml
+        run: python3 controller/vigilo-demo.py check
+      - name: Generated compose file
+        run: |
+          python3 controller/vigilo-demo.py render > /tmp/instances.yml
+          docker compose -f /tmp/instances.yml config -q
+      - name: Base compose file
+        run: VIGILO_SETUP_CODE=CHECKCODE12345 docker compose config -q
+      - name: categorielist.json
+        run: python3 -c "import json; assert isinstance(json.load(open('conf/categorielist.json')), list)"
+      - name: install.sh
+        run: sh -n install.sh
+      - name: Controller image
+        run: |
+          docker build -t vigilo-demo-controller controller
+          docker run --rm -v "$PWD:/repo" -e DEMO_DIR=/repo vigilo-demo-controller python3 /repo/controller/vigilo-demo.py check
+          docker run --rm vigilo-demo-controller docker compose version
