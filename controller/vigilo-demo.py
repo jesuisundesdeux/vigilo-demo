@@ -28,6 +28,8 @@ import yaml
 DEMO_DIR = os.environ.get('DEMO_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEMO_DOMAIN = os.environ.get('DEMO_DOMAIN', 'vigilo-demo.velocite-montpellier.fr')
 DEMO_BRANCH = os.environ.get('DEMO_BRANCH', 'main')
+# Public repository over HTTPS: the controller has no SSH key, whatever the clone URL
+DEMO_REPO_URL = os.environ.get('DEMO_REPO_URL') or 'https://github.com/jesuisundesdeux/vigilo-demo.git'
 DEMO_GIT_PULL = os.environ.get('DEMO_GIT_PULL', 'true') != 'false'
 SYNC_INTERVAL = int(os.environ.get('SYNC_INTERVAL', '60'))
 PULL_INTERVAL = float(os.environ.get('PULL_INTERVAL', '6')) * 3600
@@ -39,6 +41,9 @@ PROXY_NETWORK = 'vigilo-demo-proxy'
 BACKEND_IMAGE = os.environ.get('BACKEND_IMAGE', 'vigilobs/vigilo-backend')
 WEBAPP_IMAGE = os.environ.get('WEBAPP_IMAGE', 'ghcr.io/jesuisundesdeux/vigilo-webapp')
 MARIADB_IMAGE = os.environ.get('MARIADB_IMAGE', 'mariadb:lts')
+# Web app image not published (no tag yet, private package): built here from the repository
+WEBAPP_GIT = os.environ.get('WEBAPP_GIT') or 'https://github.com/jesuisundesdeux/vigilo-webapp.git'
+WEBAPP_BUILD_CONTEXT = os.environ.get('WEBAPP_BUILD_CONTEXT', '')  # tests: local directory
 DEFAULTS = {'backend': '0.0', 'webapp': 'latest'}
 
 ID_RE = re.compile(r'^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$')
@@ -75,10 +80,11 @@ def load_instances():
         if not isinstance(item, dict):
             errors.append('entrée %d : doit être un objet avec "id"' % n)
             continue
-        ident = str(item.get('id', ''))
+        # Host names ignore case; container names must be lowercase
+        ident = str(item.get('id', '')).strip().lower()
         where = 'entrée %d (%s)' % (n, ident or 'sans id')
         if not ID_RE.match(ident):
-            errors.append(where + ' : id en minuscules, chiffres et tirets, 32 caractères au plus')
+            errors.append(where + ' : id en lettres, chiffres et tirets, 32 caractères au plus')
         elif ident in RESERVED:
             errors.append(where + ' : id réservé')
         elif ident in seen:
@@ -210,7 +216,8 @@ def write_if_changed(path, content):
 def git_update():
     """Checkout of the repository at the last commit of DEMO_BRANCH. True when it changed."""
     before = run(['git', '-C', DEMO_DIR, 'rev-parse', 'HEAD']).stdout.strip()
-    run(['git', '-C', DEMO_DIR, 'fetch', '--quiet', 'origin', DEMO_BRANCH])
+    run(['git', '-C', DEMO_DIR, 'fetch', '--quiet', DEMO_REPO_URL,
+         '+refs/heads/%s:refs/remotes/origin/%s' % (DEMO_BRANCH, DEMO_BRANCH)])
     # The server never edits the checkout: state/ and .env are ignored by git
     run(['git', '-C', DEMO_DIR, 'reset', '--quiet', '--hard', 'origin/' + DEMO_BRANCH])
     after = run(['git', '-C', DEMO_DIR, 'rev-parse', 'HEAD']).stdout.strip()
@@ -221,6 +228,50 @@ def git_update():
 
 def compose(*args, check=True):
     return run(['docker', 'compose', '-p', PROJECT, '-f', COMPOSE_FILE] + list(args), check=check)
+
+
+def webapp_ref(tag):
+    """Git reference of the web app for an image tag: vX.Y.Z for a version, master otherwise."""
+    if re.match(r'^\d+\.\d+\.\d+$', tag):
+        return 'v' + tag
+    if tag in ('latest', 'edge') or re.match(r'^\d+(\.\d+)?$', tag):
+        return 'master'
+    return tag
+
+
+def ensure_webapp_images(instances, refresh):
+    """Web app images: pulled, or built from the repository when the registry has none."""
+    for tag in sorted(set(i['webapp'] for i in instances)):
+        image = '%s:%s' % (WEBAPP_IMAGE, tag)
+        present = run(['docker', 'image', 'inspect', image], check=False, quiet=True).returncode == 0
+        if present and not refresh:
+            continue
+        if run(['docker', 'pull', '--quiet', image], check=False, quiet=True).returncode == 0:
+            continue
+        context = WEBAPP_BUILD_CONTEXT or '%s#%s' % (WEBAPP_GIT, webapp_ref(tag))
+        log('%s introuvable sur le registre : construction depuis %s' % (image, context))
+        if run(['docker', 'build', '--quiet', '-t', image, context], check=False).returncode == 0:
+            log('%s construite' % image)
+
+
+def up_each(instances):
+    """Starts the demos one by one and removes the removed ones. True if all started."""
+    failed = []
+    for inst in instances:
+        ident = inst['id']
+        if compose('up', '-d', '--quiet-pull', ident + '-db', ident + '-backend', ident + '-webapp',
+                   check=False).returncode != 0:
+            failed.append(ident)
+    wanted = set(i['id'] for i in instances)
+    listed = run(['docker', 'ps', '-a', '--filter', 'label=com.docker.compose.project=' + PROJECT,
+                  '--format', '{{.Label "vigilo-demo.instance"}} {{.Names}}'], check=False, quiet=True)
+    for line in listed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0] not in wanted:
+            run(['docker', 'rm', '-f', parts[1]], check=False)
+    ok = [i['id'] for i in instances if i['id'] not in failed]
+    log('instances en service : %s ; en échec : %s' % (', '.join(ok) or 'aucune', ', '.join(failed)))
+    return not failed
 
 
 def scopes_of(ident):
@@ -287,13 +338,15 @@ def sync(state):
         log('mise à jour des images')
         compose('pull', '--quiet', '--ignore-pull-failures', check=False)
         state['pulled'] = time.time()
+    ensure_webapp_images(instances, pull)
     if changed or pull or not state.get('up'):
         ids = ', '.join(i['id'] for i in instances) or 'aucune'
         if compose('up', '-d', '--remove-orphans', '--quiet-pull', check=False).returncode == 0:
             log('instances en service : ' + ids)
             state['up'] = True
         else:
-            state['up'] = False
+            # One broken demo (missing image...) must not stop the others
+            state['up'] = up_each(instances)
         if pull:
             run(['docker', 'image', 'prune', '-f'], check=False, quiet=True)
         update_conf(instances)

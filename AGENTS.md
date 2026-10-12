@@ -17,7 +17,7 @@ Fonctionnement détaillé : `doc/GUIDE.md`. Usage : `README.md`.
 | Chemin | Contenu |
 |---|---|
 | `instances.yml` | Liste des démos (`id`, `description`, versions `backend` / `webapp`) |
-| `controller/vigilo-demo.py` | Contrôleur : git, compose généré (`state/compose.instances.yml`), `citylist.json` de chaque démo |
+| `controller/vigilo-demo.py` | Contrôleur : git (HTTPS), images de la webapp (construites si absentes du registre), compose généré (`state/compose.instances.yml`, démarrage démo par démo en cas d'échec), `citylist.json` de chaque démo |
 | `controller/Dockerfile` | Image du contrôleur (docker CLI + compose, git, Python, PyYAML) |
 | `docker-compose.yml` | Socle : Traefik (point d'entrée `127.0.0.1:8480`) et contrôleur |
 | `webapp/nginx.conf` | nginx des conteneurs webapp des démos (`/webapp/`, `config.json`, `/conf/`) |

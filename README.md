@@ -17,7 +17,7 @@ Tout se fait dans [`instances.yml`](instances.yml), par une pull request sur `ma
 
 ```yaml
 instances:
-  - id: demo                  # sous-domaine : minuscules, chiffres, tirets
+  - id: demo                  # sous-domaine : lettres, chiffres, tirets (mis en minuscules)
     description: Démo générale
   - id: asso-x
     description: Présentation à l'association X
@@ -30,7 +30,8 @@ Une minute environ après la fusion, le serveur applique la liste :
 - **ajout** : la démo est créée vide, comme une installation à la main avec Docker ;
 - **retrait** : ses conteneurs sont arrêtés et supprimés, **ses données sont gardées** ; remettre la même `id` la
   redémarre avec ses données ;
-- **versions** : les images sont mises à jour toutes les 6 heures (dernière version publiée pour `0.0`, `latest`…).
+- **versions** : les images sont mises à jour toutes les 6 heures (dernière version publiée pour `0.0`, `latest`…) ;
+  une image de la webapp absente du registre est construite sur le serveur depuis le dépôt vigilo-webapp.
 
 Aucune connexion au serveur n'est nécessaire.
 
