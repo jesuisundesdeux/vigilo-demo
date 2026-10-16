@@ -19,3 +19,6 @@ instances:
     description: Metz Métropole
   - id: bfc-creusot
     description: BFC Creusot
+  - id: someware
+    description: Someware
+
